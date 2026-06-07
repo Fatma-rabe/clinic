@@ -1,0 +1,140 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return isSignedIn() && userDoc().exists() ? userDoc().data.role : null;
+    }
+
+    function isDoctor() {
+      return userRole() == 'doctor';
+    }
+
+    function isReceptionist() {
+      return userRole() == 'receptionist';
+    }
+
+    function isClinicStaff() {
+      return isDoctor() || isReceptionist();
+    }
+
+    function validQueueStatus() {
+      return request.resource.data.status in ['waiting', 'in_consultation', 'completed'];
+    }
+
+    function validTimestampField(String field) {
+      return request.resource.data[field] is timestamp;
+    }
+
+    function validStringField(String field) {
+      return request.resource.data[field] is string && request.resource.data[field].size() > 0;
+    }
+
+    function validNonNegativeNumberField(String field) {
+      return request.resource.data[field] is number && request.resource.data[field] >= 0;
+    }
+
+  function validPatientCreate() {
+      return validStringField('name')
+        && request.resource.data.phone is string
+        && validNonNegativeNumberField('age')
+        && request.resource.data.general_history is string
+        && validStringField('name_lowercase')
+        && validTimestampField('created_at');
+    }
+
+    function validVisit() {
+      return request.resource.data.diagnosis is string
+        && request.resource.data.prescription_text is string
+        && request.resource.data.x_ray_url is string
+        && validTimestampField('date');
+    }
+
+    function validQueueEntry() {
+      return validStringField('patient_id')
+        && validStringField('patient_name')
+        && request.resource.data.phone is string
+        && validQueueStatus()
+        && request.resource.data.created_at != null;
+    }
+
+    function validInvoice() {
+      return validStringField('patient_id')
+        && validNonNegativeNumberField('amount_paid')
+        && validStringField('service_type')
+        && validTimestampField('date');
+    }
+
+    function validExpense() {
+      return validStringField('title')
+        && validNonNegativeNumberField('amount')
+        && validTimestampField('date');
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow read: if isDoctor();
+      allow create: if false;
+      allow update: if isSignedIn() && request.auth.uid == userId
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'uid']);
+      allow delete: if false;
+    }
+
+    match /patients/{patientId} {
+      allow read: if isClinicStaff();
+      allow create: if isReceptionist() && validPatientCreate();
+      allow update: if isClinicStaff()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['patient_id', 'created_at']);
+      allow delete: if isDoctor();
+
+      match /visits/{visitId} {
+        allow read: if isDoctor();
+        allow create: if isClinicStaff() && validVisit();
+        allow update: if isDoctor()
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['visit_id', 'patient_id', 'date']);
+        allow delete: if isDoctor();
+      }
+    }
+
+    match /live_queue/{entryId} {
+      allow read: if isClinicStaff();
+      allow create: if isReceptionist() && validQueueEntry();
+      allow update: if isClinicStaff()
+        && validQueueStatus()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['patient_id', 'patient_name', 'phone', 'created_at', 'visit_id']);
+      allow delete: if isClinicStaff();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isDoctor();
+      allow create: if isReceptionist() && validInvoice();
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isDoctor();
+      allow create: if isReceptionist() && validExpense();
+      allow update: if isReceptionist()
+        && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'amount'])
+          || request.resource.data.diff(resource.data).affectedKeys().isEmpty())
+        && validExpense();
+      allow delete: if isDoctor();
+    }
+
+    match /medical_reps/{repId} {
+      allow read: if isClinicStaff();
+      allow create, update: if isReceptionist();
+      allow delete: if isDoctor();
+    }
+  }
+}

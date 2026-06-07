@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function firestoreUserRole() {
+      let user = firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+      return user.exists() ? user.data.role : null;
+    }
+
+    function isClinicStaff() {
+      return isSignedIn()
+        && firestoreUserRole() in ['doctor', 'receptionist'];
+    }
+
+    // X-ray uploads: patients/{patientId}/visits/{visitId}/xray_{timestamp}.jpg
+    match /xrays/{patientId}/{visitId}/{fileName} {
+      allow read: if isClinicStaff();
+      allow write: if isClinicStaff()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if firestoreUserRole() == 'doctor';
+    }
+  }
+}

@@ -1,0 +1,51 @@
+name: ortho_clinic
+description: Orthopedic Clinic Management System — serverless Firebase backend.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management — Riverpod (chosen for compile-safe providers + stream integration)
+  flutter_riverpod: ^2.6.1
+
+  # Firebase
+  firebase_core: ^3.13.0
+  cloud_firestore: ^5.6.6
+  firebase_auth: ^5.5.2
+  firebase_storage: ^12.4.5
+
+  # Routing & utilities
+  go_router: ^14.8.1
+  intl: ^0.20.2
+  uuid: ^4.5.1
+  equatable: ^2.0.7
+
+  # Media & compression
+  image_picker: ^1.1.2
+  file_picker: ^8.3.7
+  flutter_image_compress: ^2.4.0
+  image: ^4.5.4
+
+  # UI
+  cached_network_image: ^3.4.1
+  photo_view: ^0.15.0
+
+  # Printing
+  printing: ^5.14.2
+  pdf: ^3.11.3
+  rxdart: ^0.28.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
