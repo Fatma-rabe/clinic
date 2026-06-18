@@ -6,9 +6,12 @@ import 'dart:math';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'dart:async';
 import '../../../core/providers/providers.dart';
 import '../../../data/models/patient.dart';
 import '../../../data/models/visit.dart';
+import '../../../data/models/drug_model.dart';
+import '../providers/drug_search_provider.dart';
 import '../services/prescription_print_service.dart';
 import 'xray_viewer_screen.dart';
 
@@ -31,6 +34,7 @@ class ConsultationScreen extends ConsumerStatefulWidget {
 class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   final _diagnosisController = TextEditingController();
   final _prescriptionController = TextEditingController();
+  List<String> _selectedDrugs = [];
   Visit? _selectedVisit;
   bool _saving = false;
   bool _uploading = false;
@@ -47,6 +51,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       _selectedVisit = visit;
       _diagnosisController.text = visit.diagnosis;
       _prescriptionController.text = visit.prescriptionText;
+      _selectedDrugs = List.from(visit.selectedDrugs);
     });
   }
 
@@ -65,6 +70,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
             visitId: visit.visitId,
             diagnosis: _diagnosisController.text.trim(),
             prescriptionText: _prescriptionController.text.trim(),
+            selectedDrugs: _selectedDrugs,
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -150,6 +156,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       patient: patient,
       diagnosis: _diagnosisController.text,
       prescription: _prescriptionController.text,
+      selectedDrugs: _selectedDrugs,
       doctorName: 'Orthopedic Surgeon',
     );
   }
@@ -210,6 +217,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                   _DiagnosisPanel(
                     diagnosisController: _diagnosisController,
                     prescriptionController: _prescriptionController,
+                    selectedDrugs: _selectedDrugs,
+                    onAddDrug: (d) => setState(() {
+                      if (!_selectedDrugs.contains(d)) _selectedDrugs.add(d);
+                    }),
+                    onRemoveDrug: (d) => setState(() => _selectedDrugs.remove(d)),
                     saving: _saving,
                     onSave: _saveConsultation,
                     onPrint: _printPrescription,
@@ -260,6 +272,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
             child: _DiagnosisPanel(
               diagnosisController: _diagnosisController,
               prescriptionController: _prescriptionController,
+              selectedDrugs: _selectedDrugs,
+              onAddDrug: (d) => setState(() {
+                if (!_selectedDrugs.contains(d)) _selectedDrugs.add(d);
+              }),
+              onRemoveDrug: (d) => setState(() => _selectedDrugs.remove(d)),
               saving: _saving,
               onSave: _saveConsultation,
               onPrint: _printPrescription,
@@ -583,6 +600,9 @@ class _DiagnosisPanel extends StatelessWidget {
   const _DiagnosisPanel({
     required this.diagnosisController,
     required this.prescriptionController,
+    required this.selectedDrugs,
+    required this.onAddDrug,
+    required this.onRemoveDrug,
     required this.saving,
     required this.uploading,
     required this.onSave,
@@ -592,6 +612,9 @@ class _DiagnosisPanel extends StatelessWidget {
 
   final TextEditingController diagnosisController;
   final TextEditingController prescriptionController;
+  final List<String> selectedDrugs;
+  final ValueChanged<String> onAddDrug;
+  final ValueChanged<String> onRemoveDrug;
   final bool saving;
   final bool uploading;
   final VoidCallback onSave;
@@ -670,6 +693,30 @@ class _DiagnosisPanel extends StatelessWidget {
                     maxLines: 3,
                   ),
                   const SizedBox(height: 20),
+                  Text(
+                    'Drugs Search',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  _DrugSearchField(onAddDrug: onAddDrug),
+                  const SizedBox(height: 8),
+                  if (selectedDrugs.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: selectedDrugs.map((d) {
+                        return Chip(
+                          label: Text(d),
+                          onDeleted: () => onRemoveDrug(d),
+                          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   Text(
                     'Prescription Details',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -755,3 +802,65 @@ final _patientProvider = FutureProvider.family<Patient?, String>((ref, id) {
 final _visitsProvider = StreamProvider.family<List<Visit>, String>((ref, id) {
   return ref.watch(visitRepositoryProvider).watchVisits(id);
 });
+
+class _DrugSearchField extends ConsumerStatefulWidget {
+  const _DrugSearchField({required this.onAddDrug});
+  final ValueChanged<String> onAddDrug;
+
+  @override
+  ConsumerState<_DrugSearchField> createState() => _DrugSearchFieldState();
+}
+
+class _DrugSearchFieldState extends ConsumerState<_DrugSearchField> {
+  Timer? _debounce;
+  TextEditingController? _textController;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<DrugModel>(
+      displayStringForOption: (drug) => drug.commercialNameEn,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final query = textEditingValue.text;
+        if (query.isEmpty) return const Iterable<DrugModel>.empty();
+
+        final completer = Completer<Iterable<DrugModel>>();
+        if (_debounce?.isActive ?? false) _debounce!.cancel();
+        
+        _debounce = Timer(const Duration(milliseconds: 300), () {
+          ref.read(drugSearchQueryProvider.notifier).state = query;
+          Future.microtask(() {
+            completer.complete(ref.read(filteredDrugsProvider));
+          });
+        });
+        
+        return completer.future;
+      },
+      onSelected: (DrugModel selection) {
+        widget.onAddDrug(selection.commercialNameEn);
+        _textController?.clear();
+      },
+      fieldViewBuilder: (context, controller, focusNode, onEditingComplete) {
+        _textController = controller;
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          onEditingComplete: onEditingComplete,
+          decoration: InputDecoration(
+            hintText: 'Search Egyptian drugs...',
+            prefixIcon: const Icon(Icons.search),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+

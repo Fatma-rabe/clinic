@@ -10,6 +10,7 @@ class PrescriptionPrintService {
     required Patient patient,
     required String diagnosis,
     required String prescription,
+    required List<String> selectedDrugs,
     required String doctorName,
   }) async {
     final doc = pw.Document();
@@ -48,8 +49,22 @@ class PrescriptionPrintService {
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
               pw.Expanded(
-                child: pw.Text(
-                  prescription.isEmpty ? '—' : prescription,
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    if (selectedDrugs.isNotEmpty) ...[
+                      pw.Text(
+                        'Medicines:',
+                        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontStyle: pw.FontStyle.italic),
+                      ),
+                      pw.SizedBox(height: 4),
+                      ...selectedDrugs.map((d) => pw.Text('• $d')),
+                      pw.SizedBox(height: 12),
+                    ],
+                    pw.Text(
+                      prescription.isEmpty && selectedDrugs.isEmpty ? '—' : prescription,
+                    ),
+                  ],
                 ),
               ),
               pw.SizedBox(height: 32),

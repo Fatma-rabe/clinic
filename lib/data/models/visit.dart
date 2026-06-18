@@ -8,6 +8,7 @@ class Visit extends Equatable {
     required this.diagnosis,
     required this.prescriptionText,
     required this.xRayUrl,
+    this.selectedDrugs = const [],
   });
 
   final String visitId;
@@ -15,6 +16,7 @@ class Visit extends Equatable {
   final String diagnosis;
   final String prescriptionText;
   final String xRayUrl;
+  final List<String> selectedDrugs;
 
   bool get hasXray => xRayUrl.isNotEmpty;
 
@@ -30,6 +32,10 @@ class Visit extends Equatable {
       diagnosis: json['diagnosis'] as String? ?? '',
       prescriptionText: json['prescription_text'] as String? ?? '',
       xRayUrl: json['x_ray_url'] as String? ?? '',
+      selectedDrugs: (json['selected_drugs'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          const [],
     );
   }
 
@@ -39,6 +45,7 @@ class Visit extends Equatable {
         'diagnosis': diagnosis,
         'prescription_text': prescriptionText,
         'x_ray_url': xRayUrl,
+        'selected_drugs': selectedDrugs,
       };
 
   static DateTime _parseDate(dynamic value) {
@@ -50,5 +57,5 @@ class Visit extends Equatable {
 
   @override
   List<Object?> get props =>
-      [visitId, date, diagnosis, prescriptionText, xRayUrl];
+      [visitId, date, diagnosis, prescriptionText, xRayUrl, selectedDrugs];
 }

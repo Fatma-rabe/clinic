@@ -47,6 +47,7 @@ class VisitRepository {
       diagnosis: diagnosis,
       prescriptionText: prescriptionText,
       xRayUrl: '',
+      selectedDrugs: const [],
     );
     await _visitsCol(patientId).doc(visitId).set(visit.toJson());
     return visit;
@@ -58,6 +59,7 @@ class VisitRepository {
     String? diagnosis,
     String? prescriptionText,
     String? xRayUrl,
+    List<String>? selectedDrugs,
   }) async {
     final updates = <String, dynamic>{};
     if (diagnosis != null) updates['diagnosis'] = diagnosis;
@@ -65,6 +67,7 @@ class VisitRepository {
       updates['prescription_text'] = prescriptionText;
     }
     if (xRayUrl != null) updates['x_ray_url'] = xRayUrl;
+    if (selectedDrugs != null) updates['selected_drugs'] = selectedDrugs;
     if (updates.isEmpty) return;
     await _visitsCol(patientId).doc(visitId).update(updates);
   }
